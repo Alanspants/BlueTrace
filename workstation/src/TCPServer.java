@@ -55,6 +55,7 @@ public class TCPServer {
                     dos.writeInt(1);
                     dos.flush();
                     System.out.println("> Authorized");
+                    System.out.println("----------------- Authorized success, " + UserID + " -----------------");
                     loginFlag = 1;
                 } else {
                     // Wrong password
@@ -65,10 +66,12 @@ public class TCPServer {
                 }
             } else {
                 // New User
-                dos.writeInt(1);
+                writeCredentials(UserID, password);
+                dos.writeInt(2);
                 dos.flush();
                 loginFlag = 1;
                 System.out.println("> Register success");
+                System.out.println("----------------- Authorized success, " + UserID + " -----------------");
             }
         } while (loginFlag != 1);
 
@@ -95,6 +98,18 @@ public class TCPServer {
             e.printStackTrace();
         }
         return credentials;
+    }
+
+    public static void writeCredentials(String userID, String password) throws IOException {
+        String pathname = "credentials.txt";
+        try (FileWriter wr = new FileWriter(pathname,true);
+             BufferedWriter bw = new BufferedWriter(wr)) {
+            String input = userID + " " + password;
+            bw.write(input + "\r\n");
+            bw.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
 

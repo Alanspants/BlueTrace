@@ -35,12 +35,14 @@ public class TCPClient {
         BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
 
         int login_responds = 0;
+        String UserID = "";
+        String password = "";
         do {
             // Read data from console
             System.out.print("> UserID: ");
-            String UserID = console.readLine();
+            UserID = console.readLine();
             System.out.print("> Password: ");
-            String password = console.readLine();
+            password = console.readLine();
 
             // Output data to Server
             dos.writeUTF(UserID + " " + password);
@@ -48,11 +50,18 @@ public class TCPClient {
 
             // Get responds from Server
             login_responds = dis.readInt();
-            if(login_responds == 0){
+            if (login_responds == 0) {
                 System.out.println("> Wrong password, please try again");
             }
-        } while (login_responds != 1);
-        System.out.println("> Login Success");
+        } while (login_responds == 0);
+
+        if (login_responds == 2) {
+            System.out.println("> Register Success");
+            System.out.println("----------------- Welcome, " + UserID + " -----------------");
+        } else {
+            System.out.println("> Login Success");
+            System.out.println("----------------- Welcome back, " + UserID + " -----------------");
+        }
     }
 
 }
