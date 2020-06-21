@@ -3,7 +3,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 
 public class TCPClient {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         System.out.println(">>> TCP Client start ...");
 
         String server_ip = args[0];
@@ -17,7 +17,7 @@ public class TCPClient {
         Client(server_ip, server_port);
     }
 
-    public static void Client(String server_ip, int server_port) throws IOException {
+    public static void Client(String server_ip, int server_port) throws IOException, InterruptedException {
         //创建Socket对象
         Socket s = new Socket(InetAddress.getByName(server_ip), server_port);
 
@@ -27,7 +27,7 @@ public class TCPClient {
         s.close();
     }
 
-    public static void userLogin(Socket s) throws IOException {
+    public static void userLogin(Socket s) throws IOException, InterruptedException {
         // Set stream
         DataOutputStream dos = new DataOutputStream(s.getOutputStream());
         DataInputStream dis = new DataInputStream(s.getInputStream());
@@ -37,6 +37,7 @@ public class TCPClient {
         int login_responds = 0;
         String UserID = "";
         String password = "";
+        int attempt = 0;
         do {
             // Read data from console
             System.out.print("> UserID: ");
@@ -51,7 +52,14 @@ public class TCPClient {
             // Get responds from Server
             login_responds = dis.readInt();
             if (login_responds == 0) {
-                System.out.println("> Wrong password, please try again");
+                attempt += 1;
+                if (attempt == 3) {
+                    System.out.println("Wrong password, attempt will be blocked for 60s!");
+                    Thread.sleep(10000);
+                    attempt = 0;
+                } else {
+                    System.out.println("> Wrong password, you can still attempt " + (3 - attempt) + "times");
+                }
             }
         } while (login_responds == 0);
 
