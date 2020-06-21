@@ -3,7 +3,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 
 public class TCPClient {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         System.out.println(">>> TCP Client start ...");
 
         String server_ip = args[0];
@@ -17,7 +17,7 @@ public class TCPClient {
         Client(server_ip, server_port);
     }
 
-    public static void Client(String server_ip, int server_port) throws IOException {
+    public static void Client(String server_ip, int server_port) throws IOException, InterruptedException {
         //创建Socket对象
         Socket s = new Socket(InetAddress.getByName(server_ip), server_port);
 
@@ -27,42 +27,57 @@ public class TCPClient {
         s.close();
     }
 
-    public static void userLogin(Socket s) throws IOException {
+    public static void userLogin(Socket s) throws IOException, InterruptedException {
         // Set stream
         DataOutputStream dos = new DataOutputStream(s.getOutputStream());
         DataInputStream dis = new DataInputStream(s.getInputStream());
         // Set reader
         BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
 
-        int login_responds = 0;
-        String UserID = "";
-        String password = "";
+        String userID = "";
+        int userIDFlag = 0;
         do {
-            // Read data from console
-            System.out.print("> UserID: ");
-            UserID = console.readLine();
-            System.out.print("> Password: ");
-            password = console.readLine();
-
-            // Output data to Server
-            dos.writeUTF(UserID + " " + password);
+            System.out.print("> userID: ");
+            userID = console.readLine();
+            dos.writeUTF(userID);
             dos.flush();
 
-            // Get responds from Server
-            login_responds = dis.readInt();
-            if (login_responds == 0) {
-                System.out.println("> Wrong password, please try again");
+            if (dis.readUTF().equals("userID existed")) {
+                userIDFlag = 1;
+            } else {
+                System.out.println("> UserID didn't exist, please try again");
+                userIDFlag = 0;
             }
-        } while (login_responds == 0);
+        } while (userIDFlag == 0);
 
-        if (login_responds == 2) {
-            System.out.println("> Register Success");
-            System.out.println("----------------- Welcome, " + UserID + " -----------------");
-        } else {
-            System.out.println("> Login Success");
-            System.out.println("----------------- Welcome back, " + UserID + " -----------------");
-        }
+        String password = "";
+        int loginFlag = 0;
+        int loginAttempt = 0;
+        do {
+            System.out.print("> password: ");
+            password = console.readLine();
+            dos.writeUTF(password);
+            dos.flush();
+
+            if (dis.readUTF().equals("password collect")) {
+                System.out.println("----------------- Welcome back, " + userID + " -----------------");
+                loginFlag = 1;
+                loginAttempt = 0;
+            } else {
+                loginAttempt = dis.read();
+                String message = "> password wrong, you can attempt " + (3 - loginAttempt) + " times, wait for another try...";
+                if (loginAttempt < 3) {
+                    System.out.println(message);
+                } else {
+                    System.out.println("Three consecutive failed attempts, you will be blocked 5s");
+                    Thread.sleep(5000);
+                }
+
+                //                System.out.println("> Wrong password, please try again");
+                loginFlag = 0;
+            }
+        } while (loginFlag == 0);
+
     }
-
 }
-
+    
