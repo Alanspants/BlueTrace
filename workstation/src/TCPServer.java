@@ -116,24 +116,28 @@ class userAuthorize implements Runnable {
             int userIDFlag = 0;
             do {
                 userID = dis.readUTF();
-                System.out.println("> Received userID: " + userID);
                 if (TCPServer.Credentials.containsKey(userID)) {
+                    if (TCPServer.loginAttempt.get(userID) == 3){
+                        dos.writeUTF("user block");
+                        dos.flush();
+                        Thread.sleep(10000);
+                        TCPServer.loginAttempt.put(userID, 0);
+                        TCPServer.alreadyLogin.put(userID, false);
+                        continue;
+                    }
                     if (TCPServer.alreadyLogin.get(userID)) {
                         dos.writeUTF("already login");
                         dos.flush();
-                        System.out.println("> user already login");
                         userIDFlag = 0;
                     } else {
                         TCPServer.alreadyLogin.put(userID, true);
                         dos.writeUTF("userID existed");
                         dos.flush();
-                        System.out.println("> userID existed, wait for password input...");
                         userIDFlag = 1;
                     }
                 } else if (!TCPServer.Credentials.containsKey(userID)) {
                     dos.writeUTF("userID wrong");
                     dos.flush();
-                    System.out.println("> userID wrong, wait for another try...");
                     userIDFlag = 0;
                 }
             } while (userIDFlag == 0);
@@ -142,38 +146,40 @@ class userAuthorize implements Runnable {
             String password = "";
             int loginFlag = 0;
             do {
-                if (TCPServer.loginAttempt.get(userID) == 3) {
-                    TCPServer.loginAttempt.put(userID, 0);
-                }
+//                if (TCPServer.loginAttempt.get(userID) == 3) {
+//                    TCPServer.loginAttempt.put(userID, 0);
+//                }
                 password = dis.readUTF();
-                System.out.println("> Received password: " + password);
                 if (TCPServer.Credentials.get(userID).equals(password)) {
                     TCPServer.loginAttempt.put(userID, 0);
                     dos.writeUTF("password collect");
                     dos.flush();
-                    System.out.println("----------------- Authorized success, " + userID + " -----------------");
+                    System.out.println("> " + userID + " login successfully");
                     loginFlag = 1;
                 } else {
                     TCPServer.loginAttempt.put(userID, TCPServer.loginAttempt.get(userID) + 1);
                     dos.writeUTF("password wrong");
-                    dos.write(TCPServer.loginAttempt.get(userID));
+                    dos.writeInt(TCPServer.loginAttempt.get(userID));
                     dos.flush();
-                    String message = "> password wrong, user can attempt " + (3 - TCPServer.loginAttempt.get(userID)) + " times, wait for another try...";
-                    System.out.println(message);
                     loginFlag = 0;
+                    if(TCPServer.loginAttempt.get(userID) == 3){
+                        Thread.sleep(10000);
+                        TCPServer.loginAttempt.put(userID, 0);
+                    }
                 }
             } while (loginFlag == 0);
-//            TCPServer.alreadyLogin.put(userID, false);
-            do{
+            do {
                 String command = dis.readUTF();
                 //持续从client来接受命令，如果中途control+c退出则视为退出当前account
-            }while(true);
-        } catch (IOException e) {
-            if(TCPServer.alreadyLogin.containsKey(userID) && TCPServer.alreadyLogin.get(userID)){
+            } while (true);
+        } catch (IOException | InterruptedException e) {
+            if (TCPServer.alreadyLogin.containsKey(userID) && TCPServer.alreadyLogin.get(userID)) {
                 TCPServer.alreadyLogin.put(userID, false);
             }
 //            e.printStackTrace();
-            System.out.println("Client terminated by user");
+            if (userID != "") {
+                System.out.println("> Client program terminated by " + userID);
+            }
         }
 //        TCPServer.alreadyLogin.put(userID, false);
     }

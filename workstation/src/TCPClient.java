@@ -24,12 +24,11 @@ public class TCPClient {
         userLogin(s);
 
 
-
         //释放
         s.close();
     }
 
-    public static void userLogin(Socket s) throws IOException, InterruptedException {
+    public static String userLogin(Socket s) throws IOException, InterruptedException {
         // Set stream
         DataOutputStream dos = new DataOutputStream(s.getOutputStream());
         DataInputStream dis = new DataInputStream(s.getInputStream());
@@ -47,11 +46,16 @@ public class TCPClient {
             String message = dis.readUTF();
             if (message.equals("userID existed")) {
                 userIDFlag = 1;
-            } else if (message.equals("already login")) {
+            } else if (message.equals("user block")){
+                System.out.println("> Your account has been blocked due to multiple login failures. Please try again later");
+                userIDFlag = 0;
+                Thread.sleep(10000);
+            }
+            else if (message.equals("already login")) {
                 System.out.println("> User already login or is processing login in other terminal");
                 userIDFlag = 0;
             } else {
-                System.out.println("> UserID didn't exist, please try again");
+                System.out.println("> Invalid username. Please try again");
                 userIDFlag = 0;
             }
         } while (userIDFlag == 0);
@@ -69,23 +73,26 @@ public class TCPClient {
                 loginFlag = 1;
                 loginAttempt = 0;
             } else {
-                loginAttempt = dis.read();
-                String message = "> password wrong, you can attempt " + (3 - loginAttempt) + " times, wait for another try...";
+                loginAttempt = dis.readInt();
+                String message = "> Invalid password. You can still attempt " + (3 - loginAttempt);
+                String time = (loginAttempt == 2) ? " time." : " times.";
+                message = message + time;
                 if (loginAttempt < 3) {
                     System.out.println(message);
                 } else {
-                    System.out.println("Three consecutive failed attempts, you will be blocked 5s");
+                    System.out.println("> Invalid password. Your account has been blocked. Please try again later");
                     Thread.sleep(10000);
                 }
                 loginFlag = 0;
             }
         } while (loginFlag == 0);
 
-        do{
+        do {
+            System.out.println("> ");
             String command = console.readLine();
             dos.writeUTF(command);
             dos.flush();
             //持续保持接受命令状态，可通过不同的命令来指向下一个function
-        }while(true);
+        } while (true);
     }
 }
