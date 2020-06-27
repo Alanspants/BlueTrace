@@ -1,7 +1,11 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.Random;
 
 public class TCPServer {
     static HashMap<String, Integer> loginAttempt = null;
@@ -30,9 +34,11 @@ public class TCPServer {
     public static void Server(int server_port) throws IOException, InterruptedException {
         ServerSocket ss = new ServerSocket(server_port);
         boolean status = true;
+        new Thread(new tempID()).start();
         while (status) {
             Socket client = ss.accept();
             new Thread(new userAuthorize(client)).start();
+
         }
     }
 
@@ -122,7 +128,7 @@ class userAuthorize implements Runnable {
                         dos.flush();
                         Thread.sleep(10000);
                         TCPServer.loginAttempt.put(userID, 0);
-                        TCPServer.alreadyLogin.put(userID, false);
+//                        TCPServer.alreadyLogin.put(userID, false);
                         continue;
                     }
                     if (TCPServer.alreadyLogin.get(userID)) {
@@ -146,9 +152,6 @@ class userAuthorize implements Runnable {
             String password = "";
             int loginFlag = 0;
             do {
-//                if (TCPServer.loginAttempt.get(userID) == 3) {
-//                    TCPServer.loginAttempt.put(userID, 0);
-//                }
                 password = dis.readUTF();
                 if (TCPServer.Credentials.get(userID).equals(password)) {
                     TCPServer.loginAttempt.put(userID, 0);
@@ -168,20 +171,137 @@ class userAuthorize implements Runnable {
                     }
                 }
             } while (loginFlag == 0);
+            // Get available TempID of current login user
+            String availableTempID = tempID.findAvailableTempID(userID);
+            if (availableTempID.equals("")){
+                tempID.createNewTempID(userID);
+                System.out.println("> " + userID + "'s TempID: " + tempID.findAvailableTempID(userID));
+            } else {
+                System.out.println("> " + userID +"'s TempID: " + availableTempID);
+            }
+
             do {
                 String command = dis.readUTF();
                 //持续从client来接受命令，如果中途control+c退出则视为退出当前account
+                if (command.equals("Download_tempID")){
+                    System.out.println("sdadsad");
+                    dos.writeUTF(tempID.findAvailableTempID(userID));
+                    dos.flush();
+                }
             } while (true);
         } catch (IOException | InterruptedException e) {
             if (TCPServer.alreadyLogin.containsKey(userID) && TCPServer.alreadyLogin.get(userID)) {
                 TCPServer.alreadyLogin.put(userID, false);
             }
-//            e.printStackTrace();
             if (userID != "") {
                 System.out.println("> Client program terminated by " + userID);
             }
         }
-//        TCPServer.alreadyLogin.put(userID, false);
+    }
+
+}
+
+class tempID implements Runnable{
+    public void run(){
+        int i = 0;
+        while(true){
+            System.out.println(i++);
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void createNewTempID(String userID) throws IOException {
+        String pathname = "tempIDs.txt";
+        boolean emptyFlag = false;
+        try (FileReader fr = new FileReader(pathname);
+             BufferedReader br = new BufferedReader(fr)){
+             String line = br.readLine();
+             if(line == null){
+                 emptyFlag = true;
+             } else {
+                 emptyFlag = false;
+             }
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+        try(FileWriter wr = new FileWriter(pathname,true);
+            BufferedWriter bw = new BufferedWriter(wr)){
+            long current_time = new Date().getTime();
+            long expire_time = current_time + 900000;
+//            System.out.println("current_time: " + current_time);
+//            System.out.println("expire_time: " + expire_time);
+            String input = userID + " " + generateTempID() + " " + stampToDate(current_time) + " " + stampToDate(expire_time);
+//            bw.write(input + "\r\n");
+            if (emptyFlag) {
+                bw.write(input);
+            } else {
+                bw.write("\r\n" + input);
+            }
+            bw.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static String findAvailableTempID(String userID) throws FileNotFoundException {
+        String pathname = "tempIDs.txt";
+        String userID_file = "";
+        String tempID_file = "";
+        long finish_time = 0;
+        try (FileReader fr = new FileReader(pathname);
+             BufferedReader br = new BufferedReader(fr)){
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[]  dataArray = line.split(" ");
+                userID_file = dataArray[0];
+//                System.out.println(userID_file);
+                if(userID_file.equals(userID)){
+                    tempID_file = dataArray[1];
+                    finish_time = dateToStamp(dataArray[4] + " " + dataArray[5]);
+                }
+            }
+            long current_time = new Date().getTime();
+            if (current_time > finish_time){
+                return "";
+            } else {
+                return tempID_file;
+            }
+        } catch (IOException | ParseException e) {
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    public static long dateToStamp(String time) throws ParseException, ParseException {
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        Date date = simpleDateFormat.parse(time);
+        long ts = date.getTime();//获取时间的时间戳
+        return ts;
+    }
+
+    public static String generateTempID(){
+        String tempID = String.valueOf(System.currentTimeMillis());
+        Random random = new Random();
+        for (int i = 0; i < 4; i++){
+            tempID += String.valueOf(random.nextInt(10));
+        }
+        for (int i = 0; i < 3; i++){
+            tempID = String.valueOf(random.nextInt(10)) + tempID;
+        }
+        return tempID;
+    }
+
+    public static String stampToDate(long stap){
+        String time;
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        long lt = stap;
+        Date date = new Date(lt);
+        time = simpleDateFormat.format(date);
+        return time;
     }
 
 

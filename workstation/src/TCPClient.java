@@ -46,14 +46,13 @@ public class TCPClient {
             String message = dis.readUTF();
             if (message.equals("userID existed")) {
                 userIDFlag = 1;
+            } else if (message.equals("already login")) {
+                System.out.println("> User already login or is processing login in other terminal");
+                userIDFlag = 0;
             } else if (message.equals("user block")){
                 System.out.println("> Your account has been blocked due to multiple login failures. Please try again later");
                 userIDFlag = 0;
                 Thread.sleep(10000);
-            }
-            else if (message.equals("already login")) {
-                System.out.println("> User already login or is processing login in other terminal");
-                userIDFlag = 0;
             } else {
                 System.out.println("> Invalid username. Please try again");
                 userIDFlag = 0;
@@ -88,10 +87,16 @@ public class TCPClient {
         } while (loginFlag == 0);
 
         do {
-            System.out.println("> ");
+            System.out.print("> ");
             String command = console.readLine();
             dos.writeUTF(command);
             dos.flush();
+            if (command.equals("Download_tempID")){
+                String response = dis.readUTF();
+                System.out.println("tempID:" + "\n\r" + response);
+            }
+
+
             //持续保持接受命令状态，可通过不同的命令来指向下一个function
         } while (true);
     }
