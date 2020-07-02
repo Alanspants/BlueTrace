@@ -3,14 +3,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Random;
+import java.util.*;
 
 public class TCPServer {
     static HashMap<String, Integer> loginAttempt = null;
     static HashMap<String, String> Credentials = null;
     static HashMap<String, Boolean> alreadyLogin = null;
+
 
     public static void main(String[] args) throws IOException, InterruptedException {
         System.out.println(">>> TCP Server start ...");
@@ -34,11 +33,9 @@ public class TCPServer {
     public static void Server(int server_port) throws IOException, InterruptedException {
         ServerSocket ss = new ServerSocket(server_port);
         boolean status = true;
-        new Thread(new tempID()).start();
         while (status) {
             Socket client = ss.accept();
-            new Thread(new userAuthorize(client)).start();
-
+            new Thread(new Channel(client)).start();
         }
     }
 
@@ -105,32 +102,36 @@ public class TCPServer {
 }
 
 
-class userAuthorize implements Runnable {
+class Channel implements Runnable {
 
     Socket client;
 
-    public userAuthorize(Socket client) {
+    public Channel(Socket client) {
         this.client = client;
     }
 
     public void run() {
         String userID = "";
         try {
+            // Set DataInputStream and DataOutputStream
             DataInputStream dis = new DataInputStream(client.getInputStream());
             DataOutputStream dos = new DataOutputStream(client.getOutputStream());
-
             int userIDFlag = 0;
+            // Username validation section
             do {
                 userID = dis.readUTF();
+                // Valid username
                 if (TCPServer.Credentials.containsKey(userID)) {
-                    if (TCPServer.loginAttempt.get(userID) == 3){
+                    // If this user is being blocked in other window
+                    if (TCPServer.loginAttempt.get(userID) == 3) {
                         dos.writeUTF("user block");
                         dos.flush();
+                        // Reset the block period
                         Thread.sleep(10000);
                         TCPServer.loginAttempt.put(userID, 0);
-//                        TCPServer.alreadyLogin.put(userID, false);
                         continue;
                     }
+                    // If the user has already login
                     if (TCPServer.alreadyLogin.get(userID)) {
                         dos.writeUTF("already login");
                         dos.flush();
@@ -141,6 +142,7 @@ class userAuthorize implements Runnable {
                         dos.flush();
                         userIDFlag = 1;
                     }
+                    // Invalid username
                 } else if (!TCPServer.Credentials.containsKey(userID)) {
                     dos.writeUTF("userID wrong");
                     dos.flush();
@@ -148,11 +150,12 @@ class userAuthorize implements Runnable {
                 }
             } while (userIDFlag == 0);
 
-
+            // Password validation section
             String password = "";
             int loginFlag = 0;
             do {
                 password = dis.readUTF();
+                // Password collect
                 if (TCPServer.Credentials.get(userID).equals(password)) {
                     TCPServer.loginAttempt.put(userID, 0);
                     dos.writeUTF("password collect");
@@ -160,40 +163,76 @@ class userAuthorize implements Runnable {
                     System.out.println("> " + userID + " login successfully");
                     loginFlag = 1;
                 } else {
+                    // Password wrong
                     TCPServer.loginAttempt.put(userID, TCPServer.loginAttempt.get(userID) + 1);
                     dos.writeUTF("password wrong");
                     dos.writeInt(TCPServer.loginAttempt.get(userID));
                     dos.flush();
                     loginFlag = 0;
-                    if(TCPServer.loginAttempt.get(userID) == 3){
+                    // Set sever in this thread to sleep and reset loginAttempt timer
+                    if (TCPServer.loginAttempt.get(userID) == 3) {
                         Thread.sleep(10000);
                         TCPServer.loginAttempt.put(userID, 0);
                     }
                 }
             } while (loginFlag == 0);
+
             // Get available TempID of current login user
             String availableTempID = tempID.findAvailableTempID(userID);
-            if (availableTempID.equals("")){
+            if (availableTempID.equals("")) {
+                // No available TempID for current user
                 tempID.createNewTempID(userID);
                 System.out.println("> " + userID + "'s TempID: " + tempID.findAvailableTempID(userID));
             } else {
-                System.out.println("> " + userID +"'s TempID: " + availableTempID);
+                // There is available TempID for current user
+                System.out.println("> " + userID + "'s TempID: " + availableTempID);
             }
 
+            // Keep listening commend from client
             do {
                 String command = dis.readUTF();
-                //持续从client来接受命令，如果中途control+c退出则视为退出当前account
-                if (command.equals("Download_tempID")){
-                    System.out.println("sdadsad");
-                    dos.writeUTF(tempID.findAvailableTempID(userID));
-                    dos.flush();
+                // "Download_tempID" command
+                if (command.equals("Download_tempID")) {
+                    availableTempID = tempID.findAvailableTempID(userID);
+                    if (availableTempID.equals("")) {
+                        // If there is no available TempID
+                        tempID.createNewTempID(userID);
+                        dos.writeUTF(tempID.findAvailableTempID(userID));
+                    } else {
+                        // There is available TempID
+                        dos.writeUTF(availableTempID);
+                    }
+                } else if (command.equals("logout")) {
+                    System.out.println("> " + userID + " logout");
+                    dis.close();
+                    dos.close();
+                    client.close();
+                    TCPServer.alreadyLogin.put(userID, false);
+                } else if (command.equals("Upload_contact_log")) {
+                    System.out.println("> Received contact log from " + userID);
+                    int logNum = dis.readInt();
+                    HashMap<String, String[]> contact_log = new HashMap<>();
+                    for (int i = 0; i < logNum; i++) {
+                        String log = dis.readUTF();
+                        System.out.println(log);
+                        String[] dataArray = log.split(" ");
+                        String[] time = new String[]{dataArray[1] + " " + dataArray[2], dataArray[3] + " " + dataArray[4]};
+                        contact_log.put(dataArray[0], time);
+                    }
+                    System.out.println("> Contact log checking");
+                    tempID.checkContactLog(contact_log);
+//                    System.out.println("----hashMap");
+//                    for(String key : contact_log.keySet()){
+//                        System.out.println(key + " " + Arrays.toString(contact_log.get(key)));
+//                    }
+
                 }
             } while (true);
         } catch (IOException | InterruptedException e) {
+            // If client server terminated by user by press control + c
             if (TCPServer.alreadyLogin.containsKey(userID) && TCPServer.alreadyLogin.get(userID)) {
+                // logout current user
                 TCPServer.alreadyLogin.put(userID, false);
-            }
-            if (userID != "") {
                 System.out.println("> Client program terminated by " + userID);
             }
         }
@@ -201,44 +240,35 @@ class userAuthorize implements Runnable {
 
 }
 
-class tempID implements Runnable{
-    public void run(){
-        int i = 0;
-        while(true){
-            System.out.println(i++);
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
+class tempID {
 
+    // Create new tempID for certain user
     public static void createNewTempID(String userID) throws IOException {
         String pathname = "tempIDs.txt";
         boolean emptyFlag = false;
+        // Check whether the tempIDs.txt file is empty
         try (FileReader fr = new FileReader(pathname);
-             BufferedReader br = new BufferedReader(fr)){
-             String line = br.readLine();
-             if(line == null){
-                 emptyFlag = true;
-             } else {
-                 emptyFlag = false;
-             }
-        } catch (IOException e){
+             BufferedReader br = new BufferedReader(fr)) {
+            String line = br.readLine();
+            if (line == null) {
+                emptyFlag = true;
+            } else {
+                emptyFlag = false;
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        try(FileWriter wr = new FileWriter(pathname,true);
-            BufferedWriter bw = new BufferedWriter(wr)){
+        // input TempID into file
+        try (FileWriter wr = new FileWriter(pathname, true);
+             BufferedWriter bw = new BufferedWriter(wr)) {
+            // Get current_time and expire_time
             long current_time = new Date().getTime();
             long expire_time = current_time + 900000;
-//            System.out.println("current_time: " + current_time);
-//            System.out.println("expire_time: " + expire_time);
             String input = userID + " " + generateTempID() + " " + stampToDate(current_time) + " " + stampToDate(expire_time);
-//            bw.write(input + "\r\n");
             if (emptyFlag) {
                 bw.write(input);
             } else {
+                // IF file is not empty, change to new line before write into file
                 bw.write("\r\n" + input);
             }
             bw.flush();
@@ -247,27 +277,33 @@ class tempID implements Runnable{
         }
     }
 
+    // Get available tempID for certain user
     public static String findAvailableTempID(String userID) throws FileNotFoundException {
         String pathname = "tempIDs.txt";
         String userID_file = "";
         String tempID_file = "";
         long finish_time = 0;
         try (FileReader fr = new FileReader(pathname);
-             BufferedReader br = new BufferedReader(fr)){
+             BufferedReader br = new BufferedReader(fr)) {
             String line;
             while ((line = br.readLine()) != null) {
-                String[]  dataArray = line.split(" ");
+                // Regex to get each element in line
+                String[] dataArray = line.split(" ");
                 userID_file = dataArray[0];
-//                System.out.println(userID_file);
-                if(userID_file.equals(userID)){
+                // Check is this line has user's info
+                if (userID_file.equals(userID)) {
                     tempID_file = dataArray[1];
+                    // Convert date -> timestamp
                     finish_time = dateToStamp(dataArray[4] + " " + dataArray[5]);
                 }
             }
+            // Compare current time with expire_time get from tempIDs.txt
             long current_time = new Date().getTime();
-            if (current_time > finish_time){
+            if (current_time > finish_time) {
+                // Not available
                 return "";
             } else {
+                // Available
                 return tempID_file;
             }
         } catch (IOException | ParseException e) {
@@ -276,26 +312,48 @@ class tempID implements Runnable{
         return "";
     }
 
+    public static void checkContactLog(HashMap<String, String[]> contact_log) throws FileNotFoundException {
+        String pathname = "tempIDs.txt";
+        for (String key : contact_log.keySet()) {
+            try (FileReader fr = new FileReader(pathname);
+                 BufferedReader br = new BufferedReader(fr)) {
+                 String line;
+                 while((line = br.readLine()) != null){
+                     String[] dataArray = line.split(" ");
+                     if(dataArray[1].equals(key)){
+                         System.out.println(dataArray[0] + " " + dataArray[2] + " " + dataArray[3] + " " + dataArray[1]);
+                         break;
+                     }
+                 }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    // Date -> timestamp
     public static long dateToStamp(String time) throws ParseException, ParseException {
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
         Date date = simpleDateFormat.parse(time);
-        long ts = date.getTime();//获取时间的时间戳
+        long ts = date.getTime();
         return ts;
     }
 
-    public static String generateTempID(){
+    // Generate tempID string combine with 3 random int + timestamp(ms) + 4 random int
+    public static String generateTempID() {
         String tempID = String.valueOf(System.currentTimeMillis());
         Random random = new Random();
-        for (int i = 0; i < 4; i++){
+        for (int i = 0; i < 4; i++) {
             tempID += String.valueOf(random.nextInt(10));
         }
-        for (int i = 0; i < 3; i++){
+        for (int i = 0; i < 3; i++) {
             tempID = String.valueOf(random.nextInt(10)) + tempID;
         }
         return tempID;
     }
 
-    public static String stampToDate(long stap){
+    // timestamp -> date
+    public static String stampToDate(long stap) {
         String time;
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
         long lt = stap;
@@ -306,4 +364,5 @@ class tempID implements Runnable{
 
 
 }
+
 

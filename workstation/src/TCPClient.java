@@ -1,6 +1,8 @@
 import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TCPClient {
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -21,14 +23,12 @@ public class TCPClient {
         //创建Socket对象
         Socket s = new Socket(InetAddress.getByName(server_ip), server_port);
 
-        userLogin(s);
-
-
+        Channel(s);
         //释放
         s.close();
     }
 
-    public static String userLogin(Socket s) throws IOException, InterruptedException {
+    public static void Channel(Socket s) throws IOException, InterruptedException {
         // Set stream
         DataOutputStream dos = new DataOutputStream(s.getOutputStream());
         DataInputStream dis = new DataInputStream(s.getInputStream());
@@ -49,7 +49,7 @@ public class TCPClient {
             } else if (message.equals("already login")) {
                 System.out.println("> User already login or is processing login in other terminal");
                 userIDFlag = 0;
-            } else if (message.equals("user block")){
+            } else if (message.equals("user block")) {
                 System.out.println("> Your account has been blocked due to multiple login failures. Please try again later");
                 userIDFlag = 0;
                 Thread.sleep(10000);
@@ -68,7 +68,7 @@ public class TCPClient {
             dos.writeUTF(password);
             dos.flush();
             if (dis.readUTF().equals("password collect")) {
-                System.out.println("----------------- Welcome back, " + userID + " -----------------");
+                System.out.println("> Welcome to the BlueTrace Simulator");
                 loginFlag = 1;
                 loginAttempt = 0;
             } else {
@@ -91,13 +91,46 @@ public class TCPClient {
             String command = console.readLine();
             dos.writeUTF(command);
             dos.flush();
-            if (command.equals("Download_tempID")){
+            if (command.equals("Download_tempID")) {
                 String response = dis.readUTF();
                 System.out.println("tempID:" + "\n\r" + response);
+            } else if (command.equals("logout")) {
+                dos.close();
+                dis.close();
+                s.close();
+                break;
+            } else if (command.equals("Upload_contact_log")) {
+                contactLog.upload(dos);
+            } else {
+                System.out.println("> Error. Invalid command");
             }
-
-
             //持续保持接受命令状态，可通过不同的命令来指向下一个function
         } while (true);
+    }
+}
+
+class contactLog {
+
+    public static void upload(DataOutputStream dos) throws IOException {
+        String pathname = "z5142012_contactlog.txt";
+        int lineNum = 0;
+        ArrayList<String> content = new ArrayList<>();
+        try (FileReader fr = new FileReader(pathname);
+             BufferedReader br = new BufferedReader(fr)) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                content.add(line);
+                System.out.println(line);
+                lineNum++;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        dos.writeInt(lineNum);
+        dos.flush();
+        for (int i = 0; i < lineNum; i++) {
+            dos.writeUTF(content.get(i));
+            dos.flush();
+        }
     }
 }
