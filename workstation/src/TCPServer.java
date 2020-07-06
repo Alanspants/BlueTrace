@@ -214,18 +214,17 @@ class Channel implements Runnable {
                     HashMap<String, String[]> contact_log = new HashMap<>();
                     for (int i = 0; i < logNum; i++) {
                         String log = dis.readUTF();
-                        System.out.println(log);
                         String[] dataArray = log.split(" ");
+                        String tempLine = dataArray[0] + ",\r\n" + dataArray[1] + " " + dataArray[2] + ",\r\n" + dataArray[3] + " " + dataArray[4] + ";";
+                        System.out.println(tempLine);
                         String[] time = new String[]{dataArray[1] + " " + dataArray[2], dataArray[3] + " " + dataArray[4]};
                         contact_log.put(dataArray[0], time);
                     }
                     System.out.println("> Contact log checking");
                     tempID.checkContactLog(contact_log);
-//                    System.out.println("----hashMap");
-//                    for(String key : contact_log.keySet()){
-//                        System.out.println(key + " " + Arrays.toString(contact_log.get(key)));
-//                    }
-
+                } else if (command.equals("beacon")){
+                    dos.writeUTF(tempID.getBeaconMessage(userID));
+                    dos.flush();
                 }
             } while (true);
         } catch (IOException | InterruptedException e) {
@@ -312,6 +311,27 @@ class tempID {
         return "";
     }
 
+    public static String getBeaconMessage(String userID){
+        String pathname = "tempIDs.txt";
+        String userID_file = "";
+        String beaconMessage = "";
+        long finish_time = 0;
+        try (FileReader fr = new FileReader(pathname);
+             BufferedReader br = new BufferedReader(fr)) {
+            String line;
+            while((line = br.readLine()) != null){
+                String[] dataArray = line.split(" ");
+                userID_file = dataArray[0];
+                if (userID_file.equals(userID)){
+                    beaconMessage = dataArray[1] + " " + dataArray[2] + " " + dataArray[3] + " " + dataArray[4] + " " + dataArray[5];
+                }
+            }
+        } catch (IOException e){
+            e.printStackTrace();
+        }
+        return beaconMessage;
+    }
+
     public static void checkContactLog(HashMap<String, String[]> contact_log) throws FileNotFoundException {
         String pathname = "tempIDs.txt";
         for (String key : contact_log.keySet()) {
@@ -321,7 +341,7 @@ class tempID {
                  while((line = br.readLine()) != null){
                      String[] dataArray = line.split(" ");
                      if(dataArray[1].equals(key)){
-                         System.out.println(dataArray[0] + " " + dataArray[2] + " " + dataArray[3] + " " + dataArray[1]);
+                         System.out.println(dataArray[0] + ",\r\n" + dataArray[2] + " " + dataArray[3] + ",\r\n" + dataArray[1] + ";");
                          break;
                      }
                  }
