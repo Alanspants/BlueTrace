@@ -323,7 +323,7 @@ class tempID {
                 String[] dataArray = line.split(" ");
                 userID_file = dataArray[0];
                 if (userID_file.equals(userID)){
-                    beaconMessage = dataArray[1] + " " + dataArray[2] + " " + dataArray[3] + " " + dataArray[4] + " " + dataArray[5];
+                    beaconMessage = dataArray[1] + "," + dataArray[2] + " " + dataArray[3] + "," + dataArray[4] + " " + dataArray[5];
                 }
             }
         } catch (IOException e){

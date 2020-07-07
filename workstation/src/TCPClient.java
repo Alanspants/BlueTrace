@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.Date;
 
 public class TCPClient {
+
+    public static boolean ThreadFlag = true;
+
     public static void main(String[] args) throws IOException, InterruptedException {
         System.out.println(">>> TCP Client start ...");
 
@@ -101,6 +104,7 @@ public class TCPClient {
         // Start UDR receiver thread to keep listening from other client
         UDPRcv UDPRecever = new UDPRcv(clientPort);
         new Thread(UDPRecever).start();
+        new Thread(new contactLog()).start();
         do {
             // Get next command input by user from console input
             System.out.print("> ");
@@ -123,6 +127,7 @@ public class TCPClient {
                 s.close();
                 // Send a UDP packet to myself to stop the UDP listening thread
                 UDPsend.send("127.0.0.1", clientPort, "stop");
+                TCPClient.ThreadFlag = false;
                 break;
             } else if (command.equals("Upload_contact_log")) {
                 // Upload_contact_log
@@ -139,6 +144,8 @@ public class TCPClient {
                 // Wait beacon message send by server
                 String beaconMessage = dis.readUTF();
                 UDPsend.send(targetIP, targetPort, beaconMessage);
+                String[] dataArray = beaconMessage.split(",");
+                System.out.println(dataArray[0] + ",\r\n" + dataArray[1] + ",\r\n" + dataArray[2] + ".");
             } else {
                 // Invalid command
                 System.out.println("> Error. Invalid command");
@@ -148,7 +155,48 @@ public class TCPClient {
 }
 
 // Class for uploading contact log
-class contactLog{
+class contactLog implements Runnable{
+
+    public void run(){
+        while(TCPClient.ThreadFlag) {
+            String new_content = "";
+            String pathname = "z5142012_contactlog.txt";
+            try (FileReader fr = new FileReader(pathname);
+                 BufferedReader br = new BufferedReader(fr)) {
+                String line = "";
+                while ((line = br.readLine()) != null) {
+                    String[] dataArray = line.split(" ");
+                    long current_time = new Date().getTime();
+//                    System.out.println(dataArray[3] + " " + dataArray[4]);
+//                    System.out.println(dataArray[5] + " " + dataArray[6]);
+                    long received_time = UDPRcv.dateToStamp(dataArray[5] + " " + dataArray[6]);
+                    if (received_time + 180000 > current_time) {
+                        if (new_content.equals("")) {
+                            new_content += line;
+                        } else {
+                            new_content += "\r\n" + line;
+                        }
+                    }
+                }
+            } catch (IOException | ParseException e) {
+                e.printStackTrace();
+            }
+            try (FileWriter wr = new FileWriter(pathname, false);
+                 BufferedWriter bw = new BufferedWriter(wr)) {
+                bw.write(new_content);
+                bw.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+//            System.out.println(new_content);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     public static void upload(DataOutputStream dos) throws IOException {
         String pathname = "z5142012_contactlog.txt";
         int lineNum = 0;
@@ -255,14 +303,15 @@ class UDPRcv implements Runnable {
             String content = new String(data, 0, dp.getLength());
             // Stop thread if receive command send by client
             if (content.equals("stop")) break;
-            String[] contentArray = content.split(" ");
-            System.out.println("\r\nReceived beacon: " + content);
-            System.out.println("Current time is: " + stampToDate(new Date().getTime()));
+            String[] contentArray = content.split(",");
+            System.out.println("\r\nReceived beacon:");
+            System.out.println(contentArray[0] + ",\r\n" + contentArray[1] + ",\r\n" + contentArray[2] + ".");
+            System.out.println("Current time is:\r\n" + stampToDate(new Date().getTime()) + ".");
             // Beacon validation
             if(beaconValid(content)){
                 System.out.println("The beacon is valid.");
                 try {
-                    contactLog.store(content);
+                    contactLog.store(contentArray[0] + " " + contentArray[1] + " " + contentArray[2]);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -274,11 +323,11 @@ class UDPRcv implements Runnable {
 
     // Beacon validation vheck
     public static Boolean beaconValid(String beaconMessage){
-        String[] contentArray = beaconMessage.split(" ");
+        String[] contentArray = beaconMessage.split(",");
         long current_time = new Date().getTime();
         long expire_time = 0;
         try {
-            expire_time = dateToStamp(contentArray[3] + " " + contentArray[4]);
+            expire_time = dateToStamp(contentArray[2]);
         } catch (ParseException e) {
             e.printStackTrace();
         }
