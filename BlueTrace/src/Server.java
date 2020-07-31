@@ -7,14 +7,15 @@ import java.util.*;
 
 public class Server {
 
-
+    // HashMap for recording available login attempt time.
     static Map<String, Integer> loginAttempt = new HashMap<String, Integer>() {};
+    // HashMap for storing users' credential information.
     static Map<String, String> Credentials = new HashMap<String, String>() {};
+    // HashMap for recording user's login status.
     static Map<String, Boolean> alreadyLogin = new HashMap<String, Boolean>() {};
 
     public static void main(String[] args) throws IOException {
         setHashMap();
-
         int server_port = Integer.parseInt(args[0]);
         int block_duration = Integer.parseInt(args[1]) * 1000;
         ServerSocket ss = new ServerSocket(server_port);
@@ -79,16 +80,11 @@ class Channel implements Runnable {
             // Password validation.
             passwordValidation(block_duration, userID, dis, dos);
 
-            // Get available TempID of current login user.
-            String availableTempID = tempID.findAvailableTempID(userID);
-            if (availableTempID.equals("")) {
-                // No available TempID for current user.
-                tempID.createNewTempID(userID);
-                System.out.println("> " + userID + "'s TempID: " + tempID.findAvailableTempID(userID));
-            } else {
-                // There is available TempID for current user.
-                System.out.println("> " + userID + "'s TempID: " + availableTempID);
-            }
+            // Create a new tempID for client when client login
+            tempID.createNewTempID(userID);
+            // System.out.println("> " + userID + "'s TempID: " + tempID.findAvailableTempID(userID));
+            System.out.println("> user: " + userID);
+            System.out.println("> tempID: " + tempID.findAvailableTempID(userID));
 
             // Keep listening for next command.
             nextCommand(client, userID, dis, dos);
@@ -112,7 +108,7 @@ class Channel implements Runnable {
 
                 // If this user is being blocked in other window.
                 if (Server.loginAttempt.get(userID) == 3) {
-                    dos.writeUTF("user block");
+                    dos.writeUTF("username_validation: user block");
                     dos.flush();
                     // Reset the block period
                     Thread.sleep(block_duration);
@@ -122,19 +118,19 @@ class Channel implements Runnable {
 
                 // If the user has already login.
                 if (Server.alreadyLogin.get(userID)) {
-                    dos.writeUTF("already login");
+                    dos.writeUTF("username_validation: already login");
                     dos.flush();
                     userIDFlag = 0;
                 } else {
                     Server.alreadyLogin.put(userID, true);
-                    dos.writeUTF("userID existed");
+                    dos.writeUTF("username_validation: userID existed");
                     dos.flush();
                     userIDFlag = 1;
                 }
 
                 // Invalid username.
             } else if (!Server.Credentials.containsKey(userID)) {
-                dos.writeUTF("userID wrong");
+                dos.writeUTF("username_validation: userID wrong");
                 dos.flush();
                 userIDFlag = 0;
             }
@@ -153,14 +149,14 @@ class Channel implements Runnable {
             // Password collect.
             if (Server.Credentials.get(userID).equals(password)) {
                 Server.loginAttempt.put(userID, 0);
-                dos.writeUTF("password collect");
+                dos.writeUTF("password_validation: password collect");
                 dos.flush();
                 System.out.println("> " + userID + " login successfully");
                 loginFlag = 1;
             } else {
                 // Password wrong.
                 Server.loginAttempt.put(userID, Server.loginAttempt.get(userID) + 1);
-                dos.writeUTF("password wrong");
+                dos.writeUTF("password_validation: password wrong");
                 dos.writeInt(Server.loginAttempt.get(userID));
                 dos.flush();
                 loginFlag = 0;
@@ -170,7 +166,6 @@ class Channel implements Runnable {
                     Server.loginAttempt.put(userID, 0);
                 }
             }
-
         } while (loginFlag == 0);
     }
 
@@ -178,51 +173,46 @@ class Channel implements Runnable {
     public static void nextCommand(Socket client, String userID, DataInputStream dis, DataOutputStream dos) throws IOException {
         do {
             String command = dis.readUTF();
-
-            // "Download_tempID" command.
-            if (command.equals("Download_tempID")) {
-                String availableTempID = tempID.findAvailableTempID(userID);
-                if (availableTempID.equals("")) {
-                    // If there is no available TempID.
-                    tempID.createNewTempID(userID);
-                    dos.writeUTF(tempID.findAvailableTempID(userID));
-                } else {
-                    // There is available TempID.
-                    dos.writeUTF(availableTempID);
-                }
-
+            if (command.equals("command: Download_tempID")) {
+                // Download_tempID
+                tempID.createNewTempID(userID);
+                dos.writeUTF(tempID.findAvailableTempID(userID));
+                // System.out.println("> " + userID + "'s TempID: " + tempID.findAvailableTempID(userID));
+                System.out.println("> user: " + userID);
+                System.out.println("> tempID: " + tempID.findAvailableTempID(userID));
+            } else if (command.equals("command: logout")) {
                 // "logout" command.
-            } else if (command.equals("logout")) {
                 System.out.println("> " + userID + " logout");
                 dis.close();
                 dos.close();
                 client.close();
                 Server.alreadyLogin.put(userID, false);
-
+                break;
+            } else if (command.equals("command: Upload_contact_log")) {
                 // "Upload_contact_log" command.
-            } else if (command.equals("Upload_contact_log")) {
                 System.out.println("> Received contact log from " + userID);
+                // Get total number of contact log record.
                 int logNum = dis.readInt();
-//                HashMap<String, String[]> contact_log = new HashMap<>();
                 ArrayList<String> contact_log = new ArrayList<>(){};
+                // Loop for receiving each record.
                 for (int i = 0; i < logNum; i++) {
+                    // Receiving record.
                     String log = dis.readUTF();
                     String[] dataArray = log.split(" ");
                     String tempLine = dataArray[0] + ", " + dataArray[1] + " " + dataArray[2] + ", " + dataArray[3] + " " + dataArray[4] + ";";
                     System.out.println(tempLine);
-//                    String[] time = new String[]{dataArray[1] + " " + dataArray[2], dataArray[3] + " " + dataArray[4]};
+                    // Adding tempID of record into ArrayList.
                     contact_log.add(dataArray[0]);
                 }
+                // Contact log check.
                 System.out.println("> Contact log checking");
-                System.out.println(contact_log.size());
                 tempID.checkContactLog(contact_log);
-
+            } else if (command.equals("command: beacon")) {
                 // "Beacon IPAddress port" command.
-            } else if (command.equals("beacon")) {
+                // Send the information which will be need in beacon back to client.
                 dos.writeUTF(tempID.getBeaconMessage(userID));
                 dos.flush();
             }
-
         } while (true);
     }
 
@@ -307,7 +297,6 @@ class tempID {
 
     // Get beacon message which gonna be sent to Client socket.
     public static String getBeaconMessage(String userID) {
-        String versionNum = "1";
         String pathname = "tempIDs.txt";
         String userID_file = "";
         String beaconMessage = "";
@@ -318,7 +307,8 @@ class tempID {
                 String[] dataArray = line.split(" ");
                 userID_file = dataArray[0];
                 if (userID_file.equals(userID)) {
-                    beaconMessage = dataArray[1] + "," + dataArray[2] + " " + dataArray[3] + "," + dataArray[4] + " " + dataArray[5] + " " + versionNum;
+                    // Format beacon message.
+                    beaconMessage = dataArray[1] + "," + dataArray[2] + " " + dataArray[3] + "," + dataArray[4] + " " + dataArray[5];
                 }
             }
         } catch (IOException e) {

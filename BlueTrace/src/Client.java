@@ -4,10 +4,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -59,14 +55,14 @@ public class Client {
             dos.writeUTF(userID);
             dos.flush();
             String message = dis.readUTF();
-            if (message.equals("userID existed")) {
+            if (message.equals("username_validation: userID existed")) {
                 // UserID correct.
                 userIDFlag = 1;
-            } else if (message.equals("already login")) {
+            } else if (message.equals("username_validation: already login")) {
                 // User already login or is logining in other terminal windows.
                 System.out.println("> User already login or is processing login in other terminal");
                 userIDFlag = 0;
-            } else if (message.equals("user block")) {
+            } else if (message.equals("username_validation: user block")) {
                 // User was during block period in other terminal.
                 System.out.println("> Your account has been blocked due to multiple login failures. Please try again later");
                 userIDFlag = 0;
@@ -91,7 +87,7 @@ public class Client {
             password = console.readLine();
             dos.writeUTF(password);
             dos.flush();
-            if (dis.readUTF().equals("password collect")) {
+            if (dis.readUTF().equals("password_validation: password collect")) {
                 // Password correct.
                 System.out.println("> Welcome to the BlueTrace Simulator");
                 loginFlag = 1;
@@ -117,6 +113,9 @@ public class Client {
 
     // Listen to next command input by user.
     public static void nextCommand(int clientPort, Socket s, DataOutputStream dos, DataInputStream dis, BufferedReader console) throws IOException {
+        // Thread for auto updating tempID.
+        // new Thread(new tempIDUpdate(new Date().getTime(), dos, dis)).start();
+
         // Thread for keep listening beacon packet.
         new Thread(new UDPRcv(clientPort)).start();
         // Thread for keep deleting expire contact log record.
@@ -130,13 +129,13 @@ public class Client {
 
             if (command.equals("Download_tempID")) {
                 // Download_tempID.
-                dos.writeUTF(command);
+                dos.writeUTF("command: Download_tempID");
                 dos.flush();
                 String response = dis.readUTF();
-                System.out.println("tempID:" + "\n\r" + response);
+                System.out.println("> tempID: " + response);
             } else if (command.equals("logout")) {
                 // logout.
-                dos.writeUTF(command);
+                dos.writeUTF("command: logout");
                 // Release resource.
                 dos.flush();
                 dos.close();
@@ -148,22 +147,43 @@ public class Client {
                 break;
             } else if (command.equals("Upload_contact_log")) {
                 // Upload_contact_log.
-                dos.writeUTF(command);
+                dos.writeUTF("command: Upload_contact_log");
                 dos.flush();
                 contactLog.upload(dos);
             } else if (commandArray.length == 3 && commandArray[0].equals("Beacon")) {
                 // Beacon.
-                dos.writeUTF("beacon");
+                dos.writeUTF("command: beacon");
                 dos.flush();
                 // Get UDP IP address and port from input.
                 String targetIP = commandArray[1];
+                int i = 0, flag = 0;
+                // Check IP address format.
+                for (i = 0; i < targetIP.length(); i++) {
+                    char word = targetIP.charAt(i);
+                    if (word == '.') flag++;
+                    if (!(Character.isDigit(word) || word == '.')) {
+                        System.out.println("> Usage: Beacon <dest IP> <dest port>");
+                        break;
+                    }
+                }
+                if (i != targetIP.length()) continue;
+                if (flag != 3){
+                    System.out.println("> Usage: Beacon <dest IP> <dest port>");
+                    continue;
+                }
                 int targetPort = Integer.parseInt(commandArray[2]);
                 // Wait beacon message send by server.
                 String beaconMessage = dis.readUTF();
-                UDPSend.send(targetIP, targetPort, beaconMessage);
+                try {
+                    UDPSend.send(targetIP, targetPort, beaconMessage);
+                } catch (IOException|IllegalArgumentException e) {
+                    // Beacon send failed.
+                    System.out.println("> Beacon message send failed, please try again.\r\n> Usage: Beacon <dest IP> <dest port>");
+                    continue;
+                }
                 // Print information to console.
                 String[] dataArray = beaconMessage.split(",");
-                System.out.println(dataArray[0] + ",\r\n" + dataArray[1] + ",\r\n" + dataArray[2] + ".");
+                System.out.println(dataArray[0] + ", " + dataArray[1] + ", " + dataArray[2] + ".");
             } else {
                 // Invalid command.
                 System.out.println("> Error. Invalid command");
@@ -270,8 +290,6 @@ class contactLog implements Runnable {
         }
     }
 
-//    Beacon 127.0.0.1 7000
-
     // Store received beacon to contactlog.txt.
     public static void store(String beaconContent) throws IOException, InterruptedException {
         lock.lock();
@@ -309,6 +327,9 @@ class contactLog implements Runnable {
 class UDPSend {
     public static void send(String IPAddress, int port, String content) throws IOException {
         byte[] data;
+        // Adding version number to UDP message
+        String versionNumber = "1";
+        content += "," + versionNumber;
         data = content.getBytes();
         InetAddress inetAddress = InetAddress.getByName(IPAddress);
         DatagramPacket dp = new DatagramPacket(data, data.length, inetAddress, port);
@@ -327,7 +348,7 @@ class UDPRcv implements Runnable {
         this.port = port;
     }
 
-    // Multiple Thread for keep listening beacon packet.
+    // Multiple Thread for keeping listening beacon packet.
     public void run() {
         DatagramSocket ds = null;
         while (true) {
@@ -348,12 +369,12 @@ class UDPRcv implements Runnable {
             String content = new String(data, 0, dp.getLength());
 
             // Stop thread if receive command send by client.
-            if (content.equals("stop")) break;
-
             String[] contentArray = content.split(",");
-            System.out.println("\r\nReceived beacon:");
-            System.out.println(contentArray[0] + ",\r\n" + contentArray[1] + ",\r\n" + contentArray[2] + ".");
-            System.out.println("Current time is:\r\n" + Client.stampToDate(new Date().getTime()) + ".");
+            if(contentArray[0].equals("stop")) break;
+
+            System.out.print("\r\nReceived beacon: ");
+            System.out.println(contentArray[0] + ", " + contentArray[1] + ", " + contentArray[2] + ".");
+            System.out.println("Current time is: " + Client.stampToDate(new Date().getTime()) + ".");
 
             // Beacon validation.
             if (beaconValid(content)) {
@@ -382,7 +403,48 @@ class UDPRcv implements Runnable {
         if (current_time <= expire_time) return true;
         else return false;
     }
-
-
 }
+
+// Auto updating tempID
+/*
+class tempIDUpdate implements Runnable {
+
+    long startTime = 0;
+    DataOutputStream dos;
+    DataInputStream dis;
+
+    public tempIDUpdate(long startTime, DataOutputStream dos, DataInputStream dis) {
+        this.startTime = startTime;
+        this.dos = dos;
+        this.dis = dis;
+    }
+
+    public void run() {
+        while (Client.ThreadFlag) {
+            long current_time = new Date().getTime();
+            // If user already login for 15 mins.
+            if (current_time >= startTime + 900000) {
+                try {
+                    // Run Download_tempID commend to get new tempID for user.
+                    dos.writeUTF("command: Download_tempID");
+                    dos.flush();
+                    String response = dis.readUTF();
+                    System.out.println("Your have already login for 15 minutes, your new tempID is: " + response);
+                    System.out.print("> ");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                // Reset start time.
+                this.startTime = current_time;
+            }
+            try {
+                // Check every second.
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+*/
 
