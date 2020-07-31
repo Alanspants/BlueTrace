@@ -46,7 +46,7 @@ public class Server {
 
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("There is no credentials.txt file found.");
         }
     }
 }
@@ -234,7 +234,8 @@ class tempID {
                 emptyFlag = false;
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // If there is no tempID file, create one.
+            emptyFlag = true;
         }
 
         // input TempID into file.

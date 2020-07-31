@@ -238,7 +238,7 @@ class contactLog implements Runnable {
                     }
                 }
             } catch (IOException | ParseException e) {
-                e.printStackTrace();
+
             }
 
             // Replace file content to String generated above.
@@ -306,7 +306,8 @@ class contactLog implements Runnable {
                 emptyFlag = false;
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            // If there is no contactlog file, create one.
+            emptyFlag = true;
         }
         try (FileWriter wr = new FileWriter(pathname, true);
              BufferedWriter bw = new BufferedWriter(wr)) {
@@ -406,6 +407,7 @@ class UDPRcv implements Runnable {
 }
 
 // Auto updating tempID
+// Confirmed with lecturer, DEPRECATED.
 /*
 class tempIDUpdate implements Runnable {
 
