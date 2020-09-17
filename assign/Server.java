@@ -15,19 +15,18 @@ public class Server {
     static Map<String, Boolean> alreadyLogin = new HashMap<String, Boolean>() {};
 
     public static void main(String[] args) throws IOException {
-        if(setHashMap()) {
-            int server_port = Integer.parseInt(args[0]);
-            int block_duration = Integer.parseInt(args[1]) * 1000;
-            ServerSocket ss = new ServerSocket(server_port);
-            while (true) {
-                Socket client = ss.accept();
-                new Thread(new Channel(client, block_duration)).start();
-            }
+        setHashMap();
+        int server_port = Integer.parseInt(args[0]);
+        int block_duration = Integer.parseInt(args[1]) * 1000;
+        ServerSocket ss = new ServerSocket(server_port);
+        while (true) {
+            Socket client = ss.accept();
+            new Thread(new Channel(client, block_duration)).start();
         }
     }
 
     // Function to initiate three hashMap.
-    public static boolean setHashMap() throws IOException {
+    public static void setHashMap() throws IOException {
         String pathname = "credentials.txt";
         try (FileReader fr = new FileReader(pathname);
              BufferedReader br = new BufferedReader(fr)) {
@@ -46,10 +45,8 @@ public class Server {
                 Server.alreadyLogin.put(UserID, false);
 
             }
-            return true;
         } catch (IOException e) {
-            System.out.println("There is no credentials.txt file found.");
-            return false;
+            e.printStackTrace();
         }
     }
 }
@@ -237,8 +234,7 @@ class tempID {
                 emptyFlag = false;
             }
         } catch (IOException e) {
-            // If there is no tempID file, create one.
-            emptyFlag = true;
+            e.printStackTrace();
         }
 
         // input TempID into file.
